@@ -1,0 +1,106 @@
+service: coffee-shop-api
+
+frameworkVersion: '3'
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  region: ${opt:region, 'us-east-1'}
+  stage: ${opt:stage, 'dev'}
+  environment:
+    PRODUCTS_TABLE: ${self:service}-products-${self:provider.stage}
+    STAGE: ${self:provider.stage}
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - dynamodb:Query
+            - dynamodb:Scan
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+            - dynamodb:DeleteItem
+          Resource:
+            - Fn::GetAtt: [ProductsTable, Arn]
+
+plugins:
+  - serverless-esbuild
+  - serverless-offline
+
+custom:
+  esbuild:
+    bundle: true
+    minify: true
+    sourcemap: true
+    exclude: ['aws-sdk']
+    target: 'node18'
+    define:
+      'require.resolve': undefined
+    platform: 'node'
+    concurrency: 10
+
+functions:
+  createProduct:
+    handler: src/handlers/createProduct.handler
+    events:
+      - http:
+          path: products
+          method: post
+          cors: true
+
+  getProduct:
+    handler: src/handlers/getProduct.handler
+    events:
+      - http:
+          path: products/{id}
+          method: get
+          cors: true
+
+  getProducts:
+    handler: src/handlers/getProducts.handler
+    events:
+      - http:
+          path: products
+          method: get
+          cors: true
+
+  updateProduct:
+    handler: src/handlers/updateProduct.handler
+    events:
+      - http:
+          path: products/{id}
+          method: put
+          cors: true
+
+  deleteProduct:
+    handler: src/handlers/deleteProduct.handler
+    events:
+      - http:
+          path: products/{id}
+          method: delete
+          cors: true
+
+resources:
+  Resources:
+    ProductsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.PRODUCTS_TABLE}
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+        BillingMode: PAY_PER_REQUEST
+
+  Outputs:
+    ProductsTableName:
+      Value: !Ref ProductsTable
+      Export:
+        Name: ${self:service}-${self:provider.stage}-ProductsTable
+    ApiGatewayRestApiId:
+      Value: !Ref ApiGatewayRestApi
+      Export:
+        Name: ${self:service}-${self:provider.stage}-ApiGatewayRestApiId 
